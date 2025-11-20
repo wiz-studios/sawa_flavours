@@ -1,0 +1,24 @@
+export type Category = 'All' | 'Breakfast' | 'Mains' | 'Sides' | 'Drinks';
+
+export interface Dish {
+  item_name: string;
+  image_filename: string;
+  ai_prompt: string;
+  description?: string; // Short description for the card
+  category: Category;
+}
+
+export interface RecipeResponse {
+  content: string;
+}
+
+export interface ImageResponse {
+  imageUrl: string;
+}
+
+export enum LoadingState {
+  IDLE = 'IDLE',
+  LOADING = 'LOADING',
+  SUCCESS = 'SUCCESS',
+  ERROR = 'ERROR',
+}
