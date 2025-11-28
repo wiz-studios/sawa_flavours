@@ -4,6 +4,7 @@ import { DishCard } from './components/DishCard';
 import { RecipeModal } from './components/RecipeModal';
 import { DISHES } from './constants';
 import { Dish, Category } from './types';
+import { Search } from 'lucide-react';
 
 const CATEGORIES: Category[] = ['All', 'Breakfast', 'Mains', 'Sides', 'Drinks'];
 
@@ -11,6 +12,7 @@ const App: React.FC = () => {
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<Category>('All');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleDishClick = (dish: Dish) => {
     setSelectedDish(dish);
@@ -24,9 +26,15 @@ const App: React.FC = () => {
   };
 
   const filteredDishes = useMemo(() => {
-    if (activeCategory === 'All') return DISHES;
-    return DISHES.filter(dish => dish.category === activeCategory);
-  }, [activeCategory]);
+    return DISHES.filter(dish => {
+      const matchesCategory = activeCategory === 'All' || dish.category === activeCategory;
+      const matchesSearch = 
+        dish.item_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (dish.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+      
+      return matchesCategory && matchesSearch;
+    });
+  }, [activeCategory, searchQuery]);
 
   return (
     <div className="min-h-screen flex flex-col bg-kenya-sand/30">
@@ -41,6 +49,20 @@ const App: React.FC = () => {
             Discover the vibrant, delicious world of Kenyan cuisine. 
             From hearty breakfast to nyama choma, experience it all with AI.
           </p>
+        </div>
+
+        {/* Search Bar */}
+        <div className="max-w-md mx-auto mb-8">
+          <div className="relative group">
+            <input 
+              type="text" 
+              placeholder="Search for a dish..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 rounded-full border border-gray-300 bg-white focus:border-kenya-red focus:ring-4 focus:ring-red-50 outline-none transition-all shadow-sm group-hover:shadow-md text-gray-700 placeholder-gray-400"
+            />
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-kenya-red transition-colors" size={20} />
+          </div>
         </div>
 
         {/* Category Filter */}
@@ -71,8 +93,20 @@ const App: React.FC = () => {
         </div>
 
         {filteredDishes.length === 0 && (
-          <div className="text-center py-20 text-gray-500">
-            No dishes found in this category.
+          <div className="text-center py-20 flex flex-col items-center">
+            <div className="bg-white p-6 rounded-full shadow-sm mb-4">
+               <Search size={40} className="text-gray-300" />
+            </div>
+            <p className="text-gray-500 text-lg mb-4">No dishes found matching your search.</p>
+            <button 
+              onClick={() => {
+                setSearchQuery('');
+                setActiveCategory('All');
+              }}
+              className="text-kenya-red font-semibold hover:underline"
+            >
+              Clear filters
+            </button>
           </div>
         )}
       </main>

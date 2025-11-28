@@ -8,8 +8,12 @@ export interface Dish {
   category: Category;
 }
 
-export interface RecipeResponse {
-  content: string;
+export interface RecipeData {
+  introduction: string;
+  ingredients: string[];
+  instructions: string[];
+  nutrition: string[];
+  tips: string;
 }
 
 export interface ImageResponse {

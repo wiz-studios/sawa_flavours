@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Dish, LoadingState } from '../types';
+import { Dish, LoadingState, RecipeData } from '../types';
 import { generateRecipe, generateDishImage } from '../services/geminiService';
-import { X, ChefHat, Image as ImageIcon, Sparkles, Loader2, Download } from 'lucide-react';
+import { X, ChefHat, Image as ImageIcon, Sparkles, Loader2, Download, Copy, Check, Share2, Activity, Flame } from 'lucide-react';
 
 interface RecipeModalProps {
   dish: Dish;
@@ -13,8 +13,9 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ dish, isOpen, onClose 
   const [activeTab, setActiveTab] = useState<'recipe' | 'image'>('recipe');
   
   // Recipe State
-  const [recipeContent, setRecipeContent] = useState<string | null>(null);
+  const [recipeData, setRecipeData] = useState<RecipeData | null>(null);
   const [recipeStatus, setRecipeStatus] = useState<LoadingState>(LoadingState.IDLE);
+  const [isCopied, setIsCopied] = useState(false);
   
   // Image State
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -23,11 +24,12 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ dish, isOpen, onClose 
   // Reset state when dish changes
   useEffect(() => {
     if (isOpen) {
-      setRecipeContent(null);
+      setRecipeData(null);
       setRecipeStatus(LoadingState.IDLE);
       setGeneratedImage(null);
       setImageStatus(LoadingState.IDLE);
       setActiveTab('recipe');
+      setIsCopied(false);
     }
   }, [dish, isOpen]);
 
@@ -36,8 +38,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ dish, isOpen, onClose 
   const handleGenerateRecipe = async () => {
     setRecipeStatus(LoadingState.LOADING);
     try {
-      const content = await generateRecipe(dish.item_name);
-      setRecipeContent(content);
+      const data = await generateRecipe(dish.item_name);
+      setRecipeData(data);
       setRecipeStatus(LoadingState.SUCCESS);
     } catch (error) {
       console.error(error);
@@ -45,10 +47,49 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ dish, isOpen, onClose 
     }
   };
 
+  const formatRecipeText = (data: RecipeData) => {
+    const ingredients = data.ingredients || [];
+    const instructions = data.instructions || [];
+    const nutrition = data.nutrition || [];
+    
+    return `${dish.item_name}\n\n${data.introduction}\n\nIngredients:\n${ingredients.join('\n- ')}\n\nInstructions:\n${instructions.map((step, i) => `${i+1}. ${step}`).join('\n')}\n\nNutrition:\n${nutrition.join('\n')}\n\nChef's Tips: ${data.tips}`;
+  };
+
+  const handleCopyRecipe = async () => {
+    if (!recipeData) return;
+    try {
+      await navigator.clipboard.writeText(formatRecipeText(recipeData));
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
+
+  const handleShareRecipe = async () => {
+    if (!recipeData) return;
+    
+    // Check if native sharing is supported
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Recipe for ${dish.item_name}`,
+          text: `Check out this authentic Kenyan recipe for ${dish.item_name}:\n\n${recipeData.introduction}\n\nRead more on Sawa Flavors.`,
+          url: window.location.href,
+        });
+      } catch (error) {
+        console.log('Error sharing:', error);
+      }
+    } else {
+      handleCopyRecipe();
+      alert('Sharing is not supported on this device. Recipe copied to clipboard instead!');
+    }
+  };
+
   const handleGenerateImage = async () => {
     setImageStatus(LoadingState.LOADING);
     try {
-      const imageUrl = await generateDishImage(dish.ai_prompt);
+      const imageUrl = await generateDishImage(dish.ai_prompt, dish.category);
       setGeneratedImage(imageUrl);
       setImageStatus(LoadingState.SUCCESS);
     } catch (error) {
@@ -113,56 +154,133 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ dish, isOpen, onClose 
           {activeTab === 'recipe' && (
             <div className="space-y-6">
               {recipeStatus === LoadingState.IDLE && (
-                <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
-                  <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <ChefHat size={32} />
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Cook?</h3>
-                  <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                    Generate a complete, authentic recipe for {dish.item_name} powered by Google's Gemini 2.5 Flash model.
-                  </p>
+                <div className="text-center py-12">
+                  <ChefHat size={48} className="mx-auto text-gray-300 mb-4" />
+                  <p className="text-gray-500 mb-6">Discover how to cook this authentic dish.</p>
                   <button 
                     onClick={handleGenerateRecipe}
-                    className="inline-flex items-center px-6 py-3 bg-kenya-red text-white text-sm font-semibold rounded-full shadow-lg hover:bg-red-700 hover:shadow-xl transition-all transform hover:-translate-y-0.5"
+                    className="bg-kenya-red hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold transition-all flex items-center gap-2 mx-auto shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                   >
-                    <Sparkles size={18} className="mr-2" />
+                    <Sparkles size={18} />
                     Generate Recipe
                   </button>
                 </div>
               )}
 
               {recipeStatus === LoadingState.LOADING && (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <Loader2 size={40} className="text-kenya-red animate-spin mb-4" />
-                  <p className="text-gray-600 font-medium animate-pulse">Consulting the digital chef...</p>
+                <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                  <Loader2 size={40} className="animate-spin text-kenya-gold" />
+                  <p className="text-gray-500 font-medium animate-pulse">Consulting the AI Chef...</p>
                 </div>
               )}
 
-              {recipeStatus === LoadingState.SUCCESS && recipeContent && (
-                <div className="prose prose-stone max-w-none bg-white p-8 rounded-xl shadow-sm border border-gray-100">
-                  <div className="whitespace-pre-wrap font-sans text-gray-800 leading-relaxed">
-                    {/* Simple markdown-like rendering for header levels */}
-                    {recipeContent.split('\n').map((line, i) => {
-                      if (line.startsWith('## ')) return <h2 key={i} className="text-xl font-bold mt-6 mb-3 text-kenya-green">{line.replace('## ', '')}</h2>;
-                      if (line.startsWith('### ')) return <h3 key={i} className="text-lg font-bold mt-4 mb-2 text-gray-900">{line.replace('### ', '')}</h3>;
-                      if (line.startsWith('**')) return <strong key={i} className="block mt-2">{line.replace(/\*\*/g, '')}</strong>;
-                      if (line.startsWith('- ')) return <li key={i} className="ml-4 list-disc marker:text-kenya-gold pl-1 my-1">{line.replace('- ', '')}</li>;
-                      if (line.startsWith('1. ')) return <div key={i} className="flex gap-3 my-2"><span className="font-bold text-kenya-red shrink-0">{line.split('. ')[0]}.</span><span>{line.substring(3)}</span></div>;
-                      return <p key={i} className="mb-2">{line}</p>;
-                    })}
+              {recipeStatus === LoadingState.SUCCESS && recipeData && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+                  {/* Action Bar */}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={handleShareRecipe}
+                      className="flex items-center gap-2 text-xs font-medium text-gray-600 hover:text-kenya-black transition-colors bg-white px-3 py-1.5 rounded-full border border-gray-200 hover:border-kenya-black shadow-sm"
+                    >
+                      <Share2 size={14} />
+                      Share
+                    </button>
+                    <button
+                      onClick={handleCopyRecipe}
+                      className="flex items-center gap-2 text-xs font-medium text-gray-600 hover:text-kenya-green transition-colors bg-white px-3 py-1.5 rounded-full border border-gray-200 hover:border-kenya-green shadow-sm"
+                    >
+                      {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                      {isCopied ? 'Copied!' : 'Copy'}
+                    </button>
                   </div>
+
+                  {/* Introduction */}
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="text-xl font-bold font-serif text-kenya-black mb-3">About this Dish</h3>
+                    <p className="text-gray-700 leading-relaxed">
+                      {recipeData.introduction || "No description available."}
+                    </p>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {/* Ingredients */}
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                      <h3 className="text-lg font-bold text-kenya-red mb-4 flex items-center gap-2">
+                        <span className="w-1.5 h-6 bg-kenya-red rounded-full"></span>
+                        Ingredients
+                      </h3>
+                      {recipeData.ingredients && recipeData.ingredients.length > 0 ? (
+                        <ul className="space-y-2">
+                          {recipeData.ingredients.map((item, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-gray-700 text-sm">
+                              <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-kenya-gold shrink-0"></span>
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-gray-400 italic text-sm">No ingredients listed.</p>
+                      )}
+                    </div>
+
+                    {/* Nutritional Information */}
+                    <div className="bg-green-50/50 p-6 rounded-xl shadow-sm border border-green-100">
+                      <h3 className="text-lg font-bold text-kenya-green mb-4 flex items-center gap-2">
+                        <Activity size={20} className="text-kenya-green" />
+                        Nutrition (Est.)
+                      </h3>
+                      {recipeData.nutrition && recipeData.nutrition.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          {recipeData.nutrition.map((item, idx) => (
+                            <div key={idx} className="bg-white px-3 py-2 rounded-lg border border-green-100 text-sm font-medium text-gray-700 shadow-sm">
+                              {item}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-400 italic text-sm">Nutritional info not available.</p>
+                      )}
+                      <p className="text-[10px] text-gray-400 mt-4 italic">
+                        * Values are AI estimates based on standard ingredients.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Instructions */}
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold text-kenya-black mb-4 flex items-center gap-2">
+                      <Flame size={20} className="text-kenya-gold" />
+                      Instructions
+                    </h3>
+                    <div className="space-y-4">
+                      {recipeData.instructions && recipeData.instructions.length > 0 ? (
+                        recipeData.instructions.map((step, idx) => (
+                          <div key={idx} className="flex gap-4">
+                            <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-orange-50 text-kenya-red font-bold text-sm">
+                              {idx + 1}
+                            </span>
+                            <p className="text-gray-700 leading-relaxed mt-1">{step}</p>
+                          </div>
+                        ))
+                      ) : (
+                         <p className="text-gray-400 italic text-sm">No instructions provided.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Chef's Tips */}
+                  {recipeData.tips && (
+                    <div className="bg-kenya-sand/20 p-6 rounded-xl border border-dashed border-kenya-earth/30">
+                      <h3 className="text-base font-bold text-kenya-earth mb-2">Chef's Tips</h3>
+                      <p className="text-gray-700 italic text-sm">{recipeData.tips}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
               {recipeStatus === LoadingState.ERROR && (
-                <div className="text-center py-10 bg-red-50 rounded-xl border border-red-100">
-                  <p className="text-red-600 font-medium">Oops! The chef dropped the cookbook.</p>
-                  <button 
-                    onClick={handleGenerateRecipe} 
-                    className="mt-4 text-sm text-red-700 underline hover:text-red-900"
-                  >
-                    Try Again
-                  </button>
+                <div className="text-center py-12 text-red-500">
+                  <p>Failed to generate recipe. Please try again.</p>
                 </div>
               )}
             </div>
@@ -170,72 +288,75 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({ dish, isOpen, onClose 
 
           {/* IMAGE TAB */}
           {activeTab === 'image' && (
-            <div className="space-y-6 h-full flex flex-col">
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-3 items-start">
-                <Sparkles className="text-blue-600 shrink-0 mt-0.5" size={18} />
-                <div>
-                  <h4 className="text-sm font-bold text-blue-900">AI Prompt</h4>
-                  <p className="text-sm text-blue-800 italic">"{dish.ai_prompt}"</p>
+            <div className="h-full flex flex-col">
+              {imageStatus === LoadingState.IDLE && (
+                <div className="text-center py-12 m-auto">
+                  <ImageIcon size={48} className="mx-auto text-gray-300 mb-4" />
+                  <p className="text-gray-500 mb-6">Visualize this dish in a high-end setting.</p>
+                  <button 
+                    onClick={handleGenerateImage}
+                    className="bg-kenya-black hover:bg-gray-800 text-white px-6 py-3 rounded-full font-semibold transition-all flex items-center gap-2 mx-auto shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                  >
+                    <Sparkles size={18} />
+                    Generate Image
+                  </button>
                 </div>
-              </div>
+              )}
 
-              <div className="flex-grow flex flex-col items-center justify-center min-h-[300px] bg-gray-100 rounded-xl overflow-hidden border border-gray-200 relative group">
-                {imageStatus === LoadingState.IDLE && (
-                  <div className="text-center p-8">
-                     <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                       <ImageIcon size={32} />
-                     </div>
-                    <p className="text-gray-500 mb-6 max-w-xs mx-auto">
-                      Visualize this dish using Google's Imagen model.
+              {imageStatus === LoadingState.LOADING && (
+                <div className="flex flex-col items-center justify-center h-full py-16 space-y-8 m-auto w-full max-w-md animate-in fade-in duration-500">
+                  <div className="relative">
+                    <div className="absolute -inset-8 bg-kenya-gold/10 rounded-full animate-pulse"></div>
+                    <div className="absolute -inset-4 bg-kenya-gold/20 rounded-full animate-pulse delay-150"></div>
+                    <div className="relative bg-white p-6 rounded-full shadow-xl border border-gray-50">
+                       <Loader2 size={48} className="animate-spin text-kenya-gold" />
+                    </div>
+                  </div>
+                  
+                  <div className="text-center space-y-3 px-4">
+                    <h3 className="text-2xl font-serif font-bold text-gray-900">
+                      Creating Masterpiece
+                    </h3>
+                    <p className="text-gray-500 leading-relaxed">
+                      Our AI chef is plating your <span className="font-semibold text-kenya-black">{dish.item_name}</span> in a photorealistic setting.
                     </p>
-                    <button 
-                      onClick={handleGenerateImage}
-                      className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white text-sm font-semibold rounded-full shadow-lg hover:bg-indigo-700 hover:shadow-xl transition-all transform hover:-translate-y-0.5"
-                    >
-                      <Sparkles size={18} className="mr-2" />
-                      Generate Image
-                    </button>
                   </div>
-                )}
 
-                {imageStatus === LoadingState.LOADING && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm z-10">
-                    <Loader2 size={48} className="text-indigo-600 animate-spin mb-4" />
-                    <p className="text-gray-600 font-medium">Creating culinary art...</p>
+                  <div className="w-48 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-kenya-gold animate-[pulse_1s_ease-in-out_infinite] rounded-full"></div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {imageStatus === LoadingState.SUCCESS && generatedImage && (
-                  <div className="relative w-full h-full flex items-center justify-center bg-black">
-                     <img 
-                        src={generatedImage} 
-                        alt="AI Generated Dish" 
-                        className="max-w-full max-h-full object-contain shadow-2xl"
-                      />
-                      <a 
-                        href={generatedImage} 
-                        download={dish.image_filename}
-                        className="absolute bottom-4 right-4 bg-white hover:bg-gray-100 text-gray-900 px-4 py-2 rounded-full shadow-lg transition-all flex items-center gap-2 font-medium text-sm"
-                        title={`Download ${dish.image_filename}`}
-                      >
-                        <Download size={18} />
-                        <span>Download</span>
-                      </a>
+              {imageStatus === LoadingState.SUCCESS && generatedImage && (
+                <div className="flex flex-col items-center animate-in fade-in zoom-in duration-500 h-full">
+                  <div className="relative w-full rounded-xl overflow-hidden shadow-lg group">
+                    <img 
+                      src={generatedImage} 
+                      alt={dish.item_name} 
+                      className="w-full h-auto object-cover max-h-[500px]"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none" />
                   </div>
-                )}
-                
-                {imageStatus === LoadingState.ERROR && (
-                  <div className="text-center p-8">
-                    <p className="text-red-500 mb-4">Failed to generate image.</p>
-                     <button 
-                      onClick={handleGenerateImage}
-                      className="text-sm text-indigo-600 hover:underline"
+                  
+                  <div className="mt-6">
+                    <a 
+                      href={generatedImage} 
+                      download={`${dish.image_filename}`}
+                      className="flex items-center gap-2 bg-gray-900 hover:bg-black text-white px-5 py-2.5 rounded-lg transition-all shadow-md hover:shadow-lg"
                     >
-                      Try Again
-                    </button>
+                      <Download size={18} />
+                      Download Image
+                    </a>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {imageStatus === LoadingState.ERROR && (
+                <div className="text-center py-12 text-red-500 m-auto">
+                  <p>Failed to generate image. Please try again.</p>
+                </div>
+              )}
             </div>
           )}
         </div>
